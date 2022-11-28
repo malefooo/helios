@@ -25,11 +25,11 @@ pub enum DBType {
 impl From<String> for DBType {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
-            "file" => {DBType::File},
-            "redis" => {DBType::Redis},
-            "mysql" => {DBType::MySql},
-            "postgres" => {DBType::Postgres},
-            _ => {DBType::None}
+            "file" => DBType::File,
+            "redis" => DBType::Redis,
+            "mysql" => DBType::MySql,
+            "postgres" => DBType::Postgres,
+            _ => DBType::None,
         }
     }
 }
@@ -37,15 +37,14 @@ impl From<String> for DBType {
 impl From<&str> for DBType {
     fn from(value: &str) -> Self {
         match value.to_lowercase().as_str() {
-            "file" => {DBType::File},
-            "redis" => {DBType::Redis},
-            "mysql" => {DBType::MySql},
-            "postgres" => {DBType::Postgres},
-            _ => {DBType::None}
+            "file" => DBType::File,
+            "redis" => DBType::Redis,
+            "mysql" => DBType::MySql,
+            "postgres" => DBType::Postgres,
+            _ => DBType::None,
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {

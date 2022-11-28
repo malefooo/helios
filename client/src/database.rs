@@ -41,7 +41,7 @@ pub struct RedisDB {
 impl RedisDB {
     pub fn new(address: &str) -> Result<Self> {
         let client = Client::open(address)?;
-        Ok(Self{ client })
+        Ok(Self { client })
     }
 
     pub fn write_light_client_store(&self, value: String, slot: u64) -> Result<()> {

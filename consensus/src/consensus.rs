@@ -296,21 +296,20 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
     // implements state changes from apply_light_client_update and process_light_client_update in
     // the specification
     fn apply_generic_update(&mut self, update: &GenericUpdate) {
-
         // send message to db
         if let Some(sender) = &self.sender {
-
             let json = serde_json::to_string(&update)
-                .map_err(|e|info!("update to json error:{:?}",e))
-                .unwrap_or_else(|_|"".to_string());
+                .map_err(|e| info!("update to json error:{:?}", e))
+                .unwrap_or_else(|_| "".to_string());
 
             if json.is_empty() {
                 return;
             }
 
             let slot = update.attested_header.slot;
-            sender.send((json, slot))
-                .map_err(|e|info!("send json to db error:{:?}",e))
+            sender
+                .send((json, slot))
+                .map_err(|e| info!("send json to db error:{:?}", e))
                 .unwrap_or_default();
         }
 
@@ -626,7 +625,8 @@ mod tests {
             hex::decode("1e591af1e90f2db918b2a132991c7c2ee9a4ab26da496bd6e71e4f0bd65ea870")
                 .unwrap();
 
-        let mut client = ConsensusClient::new("testdata/", &checkpoint, Arc::new(config), None).unwrap();
+        let mut client =
+            ConsensusClient::new("testdata/", &checkpoint, Arc::new(config), None).unwrap();
         client.bootstrap().await.unwrap();
         client
     }

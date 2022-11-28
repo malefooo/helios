@@ -18,18 +18,26 @@ use futures::executor::block_on;
 use log::info;
 
 #[tokio::main]
-async fn main<>() -> Result<()> {
+async fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let (config,db_type) = get_config();
+    let (config, db_type) = get_config();
 
     let (mut client, receiver) = match db_type {
-        DBType::File => {
-            (ClientType::FileDB(ClientBuilder::new().config(config).build_file_db()?), None)
-        }
+        DBType::File => (
+            ClientType::FileDB(ClientBuilder::new().config(config).build_file_db()?),
+            None,
+        ),
         DBType::Redis => {
-            let (sender, receiver ) = tokio::sync::mpsc::unbounded_channel::<(String, u64)>();
-            (ClientType::RedisDB(ClientBuilder::new().config(config).build_redis_db(Some(sender))?), Some(receiver))
+            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(String, u64)>();
+            (
+                ClientType::RedisDB(
+                    ClientBuilder::new()
+                        .config(config)
+                        .build_redis_db(Some(sender))?,
+                ),
+                Some(receiver),
+            )
         }
         _ => {
             return Err(eyre!("not impl db type"));
@@ -83,9 +91,12 @@ fn get_config() -> (Config, DBType) {
 
     let config_path = home_dir().unwrap().join(".helios/helios.toml");
 
-    let cli_config:CliConfig = cli.as_cli_config();
+    let cli_config: CliConfig = cli.as_cli_config();
 
-    (Config::from_file(&config_path, &cli.network, &cli_config), cli_config.db_type)
+    (
+        Config::from_file(&config_path, &cli.network, &cli_config),
+        cli_config.db_type,
+    )
 }
 
 #[derive(Parser)]

@@ -29,13 +29,17 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(config: Arc<Config>, sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>) -> Result<Self, NodeError> {
+    pub fn new(
+        config: Arc<Config>,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+    ) -> Result<Self, NodeError> {
         let consensus_rpc = &config.consensus_rpc;
         let checkpoint_hash = &config.checkpoint;
         let execution_rpc = &config.execution_rpc;
 
-        let consensus = ConsensusClient::new(consensus_rpc, checkpoint_hash, config.clone(), sender)
-            .map_err(NodeError::ConsensusClientCreationError)?;
+        let consensus =
+            ConsensusClient::new(consensus_rpc, checkpoint_hash, config.clone(), sender)
+                .map_err(NodeError::ConsensusClientCreationError)?;
         let execution = Arc::new(
             ExecutionClient::new(execution_rpc).map_err(NodeError::ExecutionClientCreationError)?,
         );

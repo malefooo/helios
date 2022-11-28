@@ -33,36 +33,42 @@ pub enum ClientType {
 impl ClientType {
     pub async fn start(&mut self) -> Result<()> {
         match self {
-            ClientType::FileDB(c) => {c.start().await}
-            ClientType::RedisDB(c) => {c.start().await}
+            ClientType::FileDB(c) => c.start().await,
+            ClientType::RedisDB(c) => c.start().await,
         }
     }
 
-    pub async fn shutdown(&self){
+    pub async fn shutdown(&self) {
         match self {
-            ClientType::FileDB(c) => {c.shutdown().await;}
-            ClientType::RedisDB(c) => {c.shutdown().await;}
+            ClientType::FileDB(c) => {
+                c.shutdown().await;
+            }
+            ClientType::RedisDB(c) => {
+                c.shutdown().await;
+            }
         }
     }
 
-    pub async fn receive(&self, receiver: Option<tokio::sync::mpsc::UnboundedReceiver<(String, u64)>>){
+    pub async fn receive(
+        &self,
+        receiver: Option<tokio::sync::mpsc::UnboundedReceiver<(String, u64)>>,
+    ) {
         if let Some(mut r) = receiver {
             match self {
                 ClientType::FileDB(_) => {
                     return;
                 }
                 ClientType::RedisDB(c) => {
-                    let db = c.db.as_ref().unwrap().clone();//safe
+                    let db = c.db.as_ref().unwrap().clone(); //safe
                     spawn(async move {
                         loop {
                             if let Some((msg, slot)) = r.recv().await {
                                 db.write_light_client_store(msg, slot)
-                                    .map_err(|e|info!("write msg to redis error: {:?}", e))
-                                    .unwrap();//safe
+                                    .map_err(|e| info!("write msg to redis error: {:?}", e))
+                                    .unwrap(); //safe
                             }
                         }
                     });
-
                 }
             }
         } else {
@@ -95,7 +101,10 @@ impl Client<FileDB> {
 }
 
 impl Client<RedisDB> {
-    fn new_redis_db(config: Config, sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>) -> Result<Self> {
+    fn new_redis_db(
+        config: Config,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+    ) -> Result<Self> {
         let config = Arc::new(config);
         let node = Node::new(config.clone(), sender)?;
         let node = Arc::new(RwLock::new(node));
@@ -117,11 +126,7 @@ impl Client<RedisDB> {
             return Err(eyre::eyre!("redis address is none"));
         };
 
-        Ok(Client{
-            node,
-            rpc,
-            db,
-        })
+        Ok(Client { node, rpc, db })
     }
 }
 
@@ -253,7 +258,10 @@ impl ClientBuilder {
         Client::new_file_db(self.build()?)
     }
 
-    pub fn build_redis_db(self, sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>) -> Result<Client<RedisDB>> {
+    pub fn build_redis_db(
+        self,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+    ) -> Result<Client<RedisDB>> {
         Client::new_redis_db(self.build()?, sender)
     }
 }
