@@ -227,7 +227,7 @@ pub struct OptimisticUpdate {
     pub signature_slot: u64,
 }
 
-#[derive(serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
+#[derive(serde::Deserialize, Debug, Clone, Default, SimpleSerialize, serde::Serialize)]
 pub struct Header {
     #[serde(deserialize_with = "u64_deserialize")]
     pub slot: u64,
@@ -241,7 +241,7 @@ pub struct Header {
     pub body_root: Bytes32,
 }
 
-#[derive(Debug, Clone, Default, SimpleSerialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, SimpleSerialize, serde::Deserialize, serde::Serialize)]
 pub struct SyncCommittee {
     #[serde(deserialize_with = "pubkeys_deserialize")]
     pub pubkeys: Vector<BLSPubKey, 512>,
@@ -249,13 +249,14 @@ pub struct SyncCommittee {
     pub aggregate_pubkey: BLSPubKey,
 }
 
-#[derive(serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
+#[derive(serde::Deserialize, Debug, Clone, Default, SimpleSerialize, serde::Serialize)]
 pub struct SyncAggregate {
     pub sync_committee_bits: Bitvector<512>,
     #[serde(deserialize_with = "signature_deserialize")]
     pub sync_committee_signature: SignatureBytes,
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct GenericUpdate {
     pub attested_header: Header,
     pub sync_aggregate: SyncAggregate,

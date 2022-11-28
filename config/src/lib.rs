@@ -13,6 +13,40 @@ use serde::{Deserialize, Serialize};
 
 use common::utils::hex_str_to_bytes;
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum DBType {
+    File,
+    Redis,
+    MySql,
+    Postgres,
+    None,
+}
+
+impl From<String> for DBType {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "file" => {DBType::File},
+            "redis" => {DBType::Redis},
+            "mysql" => {DBType::MySql},
+            "postgres" => {DBType::Postgres},
+            _ => {DBType::None}
+        }
+    }
+}
+
+impl From<&str> for DBType {
+    fn from(value: &str) -> Self {
+        match value.to_lowercase().as_str() {
+            "file" => {DBType::File},
+            "redis" => {DBType::Redis},
+            "mysql" => {DBType::MySql},
+            "postgres" => {DBType::Postgres},
+            _ => {DBType::None}
+        }
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
     pub consensus_rpc: String,
@@ -27,6 +61,7 @@ pub struct Config {
     pub chain: ChainConfig,
     pub forks: Forks,
     pub max_checkpoint_age: u64,
+    // pub db_type: DBType,
 }
 
 impl Config {
@@ -106,6 +141,7 @@ pub struct CliConfig {
     pub checkpoint: Option<Vec<u8>>,
     pub rpc_port: Option<u16>,
     pub data_dir: PathBuf,
+    pub db_type: DBType,
 }
 
 impl CliConfig {

@@ -22,6 +22,7 @@ toml = "0.5.9"
 log = "0.4.17"
 openssl = { version = "0.10", features = ["vendored"] }
 thiserror = "1.0.37"
+redis = {version = "0.21.5", features = ["tokio-comp"]}
 
 common = { path = "../common" }
 consensus = { path = "../consensus" }

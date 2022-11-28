@@ -10,28 +10,45 @@ use clap::Parser;
 use common::utils::hex_str_to_bytes;
 use dirs::home_dir;
 use env_logger::Env;
-use eyre::Result;
+use eyre::{eyre, Result};
 
-use client::{database::FileDB, Client, ClientBuilder};
-use config::{CliConfig, Config};
+use client::{ClientBuilder, ClientType};
+use config::{CliConfig, Config, DBType};
 use futures::executor::block_on;
 use log::info;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main<>() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let config = get_config();
-    let mut client = ClientBuilder::new().config(config).build()?;
+    let (config,db_type) = get_config();
+
+    let (mut client, receiver) = match db_type {
+        DBType::File => {
+            (ClientType::FileDB(ClientBuilder::new().config(config).build_file_db()?), None)
+        }
+        DBType::Redis => {
+            let (sender, receiver ) = tokio::sync::mpsc::unbounded_channel::<(String, u64)>();
+            (ClientType::RedisDB(ClientBuilder::new().config(config).build_redis_db(Some(sender))?), Some(receiver))
+        }
+        _ => {
+            return Err(eyre!("not impl db type"));
+        }
+    };
 
     client.start().await?;
 
-    register_shutdown_handler(client);
+    let arc_client = Arc::new(client);
+
+    arc_client.clone().receive(receiver).await;
+
+    register_shutdown_handler(arc_client);
+
     std::future::pending().await
 }
 
-fn register_shutdown_handler(client: Client<FileDB>) {
-    let client = Arc::new(client);
+fn register_shutdown_handler(client_type: Arc<ClientType>) {
+    // let client = Arc::new(client_type);
     let shutdown_counter = Arc::new(Mutex::new(0));
 
     ctrlc::set_handler(move || {
@@ -51,7 +68,7 @@ fn register_shutdown_handler(client: Client<FileDB>) {
         );
 
         if counter_value == 1 {
-            let client = client.clone();
+            let client = client_type.clone();
             std::thread::spawn(move || {
                 block_on(client.shutdown());
                 exit(0);
@@ -61,14 +78,14 @@ fn register_shutdown_handler(client: Client<FileDB>) {
     .expect("could not register shutdown handler");
 }
 
-fn get_config() -> Config {
+fn get_config() -> (Config, DBType) {
     let cli = Cli::parse();
 
     let config_path = home_dir().unwrap().join(".helios/helios.toml");
 
-    let cli_config = cli.as_cli_config();
+    let cli_config:CliConfig = cli.as_cli_config();
 
-    Config::from_file(&config_path, &cli.network, &cli_config)
+    (Config::from_file(&config_path, &cli.network, &cli_config), cli_config.db_type)
 }
 
 #[derive(Parser)]
@@ -84,7 +101,10 @@ struct Cli {
     #[clap(short, long, env)]
     consensus_rpc: Option<String>,
     #[clap(short, long, env)]
+    /// db_type=file => "~/.helios", db_type=redis => "redis://127.0.0.1/0",
     data_dir: Option<String>,
+    #[clap(long, env, default_value = "file")]
+    db_type: String,
 }
 
 impl Cli {
@@ -100,6 +120,7 @@ impl Cli {
             consensus_rpc: self.consensus_rpc.clone(),
             data_dir: self.get_data_dir(),
             rpc_port: self.rpc_port,
+            db_type: self.get_db_type(),
         }
     }
 
@@ -126,5 +147,10 @@ impl Cli {
                 .unwrap()
                 .join(format!(".helios/data/{}", self.network))
         }
+    }
+
+    fn get_db_type(&self) -> DBType {
+        let db_type: DBType = self.db_type.clone().into();
+        db_type
     }
 }

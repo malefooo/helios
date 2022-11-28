@@ -15,7 +15,7 @@ use tokio::spawn;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
-use crate::database::{Database, FileDB};
+use crate::database::{Database, FileDB, RedisDB};
 use crate::node::Node;
 use crate::rpc::Rpc;
 
@@ -25,10 +25,56 @@ pub struct Client<DB: Database> {
     db: Option<DB>,
 }
 
+pub enum ClientType {
+    FileDB(Client<FileDB>),
+    RedisDB(Client<RedisDB>),
+}
+
+impl ClientType {
+    pub async fn start(&mut self) -> Result<()> {
+        match self {
+            ClientType::FileDB(c) => {c.start().await}
+            ClientType::RedisDB(c) => {c.start().await}
+        }
+    }
+
+    pub async fn shutdown(&self){
+        match self {
+            ClientType::FileDB(c) => {c.shutdown().await;}
+            ClientType::RedisDB(c) => {c.shutdown().await;}
+        }
+    }
+
+    pub async fn receive(&self, receiver: Option<tokio::sync::mpsc::UnboundedReceiver<(String, u64)>>){
+        if let Some(mut r) = receiver {
+            match self {
+                ClientType::FileDB(_) => {
+                    return;
+                }
+                ClientType::RedisDB(c) => {
+                    let db = c.db.as_ref().unwrap().clone();//safe
+                    spawn(async move {
+                        loop {
+                            if let Some((msg, slot)) = r.recv().await {
+                                db.write_light_client_store(msg, slot)
+                                    .map_err(|e|info!("write msg to redis error: {:?}", e))
+                                    .unwrap();//safe
+                            }
+                        }
+                    });
+
+                }
+            }
+        } else {
+            return;
+        }
+    }
+}
+
 impl Client<FileDB> {
-    fn new(config: Config) -> Result<Self> {
+    fn new_file_db(config: Config) -> Result<Self> {
         let config = Arc::new(config);
-        let node = Node::new(config.clone())?;
+        let node = Node::new(config.clone(), None)?;
         let node = Arc::new(RwLock::new(node));
 
         let rpc = if let Some(port) = config.rpc_port {
@@ -45,6 +91,37 @@ impl Client<FileDB> {
         };
 
         Ok(Client { node, rpc, db })
+    }
+}
+
+impl Client<RedisDB> {
+    fn new_redis_db(config: Config, sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>) -> Result<Self> {
+        let config = Arc::new(config);
+        let node = Node::new(config.clone(), sender)?;
+        let node = Arc::new(RwLock::new(node));
+
+        let rpc = if let Some(port) = config.rpc_port {
+            Some(Rpc::new(node.clone(), port))
+        } else {
+            None
+        };
+
+        let redis_address = config.data_dir.clone();
+        let db = if let Some(address) = redis_address {
+            let address = address.to_str().unwrap().to_string(); //safe
+            if !address.contains("redis://") {
+                return Err(eyre::eyre!("not redis address, address: {}", address));
+            }
+            Some(RedisDB::new(address.as_str())?)
+        } else {
+            return Err(eyre::eyre!("redis address is none"));
+        };
+
+        Ok(Client{
+            node,
+            rpc,
+            db,
+        })
     }
 }
 
@@ -107,7 +184,7 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Client<FileDB>> {
+    fn build(self) -> Result<Config> {
         let base_config = if let Some(network) = self.network {
             network.to_base_config()
         } else {
@@ -169,7 +246,15 @@ impl ClientBuilder {
             max_checkpoint_age: base_config.max_checkpoint_age,
         };
 
-        Client::new(config)
+        Ok(config)
+    }
+
+    pub fn build_file_db(self) -> Result<Client<FileDB>> {
+        Client::new_file_db(self.build()?)
+    }
+
+    pub fn build_redis_db(self, sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>) -> Result<Client<RedisDB>> {
+        Client::new_redis_db(self.build()?, sender)
     }
 }
 
@@ -181,7 +266,7 @@ impl<DB: Database> Client<DB> {
 
         let res = self.node.write().await.sync().await;
         if let Err(err) = res {
-            warn!("consensus error: {}", err);
+            warn!("consensus error: {:?}", err);
         }
 
         let node = self.node.clone();
@@ -189,7 +274,7 @@ impl<DB: Database> Client<DB> {
             loop {
                 let res = node.write().await.advance().await;
                 if let Err(err) = res {
-                    warn!("consensus error: {}", err);
+                    warn!("consensus error: {:?}", err);
                 }
 
                 let next_update = node.read().await.duration_until_next_update();
