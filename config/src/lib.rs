@@ -46,6 +46,13 @@ impl From<&str> for DBType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ChannelMsgType{
+    NextCommitteeLeaf(Option<String>),
+    Update(String),
+    HeaderLeaf(String),
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
     pub consensus_rpc: String,

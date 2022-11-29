@@ -8,7 +8,7 @@ use eyre::{eyre, Result};
 
 use common::errors::BlockNotFoundError;
 use common::types::BlockTag;
-use config::Config;
+use config::{ChannelMsgType, Config};
 use consensus::rpc::nimbus_rpc::NimbusRpc;
 use consensus::types::{ExecutionPayload, Header};
 use consensus::ConsensusClient;
@@ -31,7 +31,7 @@ pub struct Node {
 impl Node {
     pub fn new(
         config: Arc<Config>,
-        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(ChannelMsgType, u64)>>,
     ) -> Result<Self, NodeError> {
         let consensus_rpc = &config.consensus_rpc;
         let checkpoint_hash = &config.checkpoint;

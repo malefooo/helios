@@ -11,7 +11,7 @@ use ssz_rs::prelude::*;
 
 use common::types::*;
 use common::utils::*;
-use config::Config;
+use config::{ChannelMsgType, Config};
 
 use crate::constants::MAX_REQUEST_LIGHT_CLIENT_UPDATES;
 use crate::errors::ConsensusError;
@@ -29,7 +29,7 @@ pub struct ConsensusClient<R: ConsensusRpc> {
     initial_checkpoint: Vec<u8>,
     pub last_checkpoint: Option<Vec<u8>>,
     pub config: Arc<Config>,
-    sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+    sender: Option<tokio::sync::mpsc::UnboundedSender<(ChannelMsgType, u64)>>,
 }
 
 #[derive(Debug, Default, serde::Deserialize, SimpleSerialize, Clone)]
@@ -47,7 +47,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         rpc: &str,
         checkpoint_block_root: &Vec<u8>,
         config: Arc<Config>,
-        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(ChannelMsgType, u64)>>,
     ) -> Result<ConsensusClient<R>> {
         let rpc = R::new(rpc);
 
@@ -231,7 +231,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             return Err(ConsensusError::NotRelevant.into());
         }
 
-        if update.finalized_header.is_some() && update.finality_branch.is_some() {
+        let _header_leaf = if update.finalized_header.is_some() && update.finality_branch.is_some() {
             let is_valid = is_finality_proof_valid(
                 &update.attested_header,
                 &mut update.finalized_header.clone().unwrap(),
@@ -241,9 +241,13 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             if !is_valid {
                 return Err(ConsensusError::InvalidFinalityProof.into());
             }
-        }
 
-        if update.next_sync_committee.is_some() && update.next_sync_committee_branch.is_some() {
+            Some(leaf_hash(&mut update.finalized_header.clone().unwrap())?)
+        } else {
+            None
+        };
+
+        let next_committee_leaf = if update.next_sync_committee.is_some() && update.next_sync_committee_branch.is_some() {
             let is_valid = is_next_committee_proof_valid(
                 &update.attested_header,
                 &mut update.next_sync_committee.clone().unwrap(),
@@ -253,7 +257,11 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             if !is_valid {
                 return Err(ConsensusError::InvalidNextSyncCommitteeProof.into());
             }
-        }
+
+            Some(leaf_hash(&mut update.next_sync_committee.clone().unwrap())?)
+        } else {
+            None
+        };
 
         let sync_committee = if update_sig_period == store_period {
             &self.store.current_sync_committee
@@ -273,6 +281,11 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
         if !is_valid_sig {
             return Err(ConsensusError::InvalidSignature.into());
+        }
+
+        //send leaf to channel
+        if let Some(s) = &self.sender{
+            s.send((ChannelMsgType::NextCommitteeLeaf(next_committee_leaf), update.attested_header.slot))?;
         }
 
         Ok(())
@@ -296,23 +309,6 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
     // implements state changes from apply_light_client_update and process_light_client_update in
     // the specification
     fn apply_generic_update(&mut self, update: &GenericUpdate) {
-        // send message to db
-        if let Some(sender) = &self.sender {
-            let json = serde_json::to_string(&update)
-                .map_err(|e| info!("update to json error:{:?}", e))
-                .unwrap_or_else(|_| "".to_string());
-
-            if json.is_empty() {
-                return;
-            }
-
-            let slot = update.attested_header.slot;
-            sender
-                .send((json, slot))
-                .map_err(|e| info!("send json to db error:{:?}", e))
-                .unwrap_or_default();
-        }
-
         let committee_bits = get_bits(&update.sync_aggregate.sync_committee_bits);
 
         self.store.current_max_active_participants =

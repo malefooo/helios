@@ -7,7 +7,7 @@ use ethers::types::{Filter, Log, Transaction, TransactionReceipt, H256};
 use eyre::{eyre, Result};
 
 use common::types::BlockTag;
-use config::Config;
+use config::{ChannelMsgType, Config};
 use consensus::types::Header;
 use execution::types::{CallOpts, ExecutionBlock};
 use log::{info, warn};
@@ -51,7 +51,7 @@ impl ClientType {
 
     pub async fn receive(
         &self,
-        receiver: Option<tokio::sync::mpsc::UnboundedReceiver<(String, u64)>>,
+        receiver: Option<tokio::sync::mpsc::UnboundedReceiver<(ChannelMsgType, u64)>>,
     ) {
         if let Some(mut r) = receiver {
             match self {
@@ -63,9 +63,19 @@ impl ClientType {
                     spawn(async move {
                         loop {
                             if let Some((msg, slot)) = r.recv().await {
-                                db.write_light_client_store(msg, slot)
-                                    .map_err(|e| info!("write msg to redis error: {:?}", e))
-                                    .unwrap(); //safe
+
+                                match msg {
+                                    ChannelMsgType::NextCommitteeLeaf(msg) => {
+                                        if let Some(msg) = msg {
+                                            db.write_next_committee_leaf(msg, slot)
+                                                .map_err(|e| info!("write msg to redis error: {:?}", e))
+                                                .unwrap_or_default(); //safe
+                                        }
+                                    }
+                                    ChannelMsgType::Update(_) => {}
+                                    ChannelMsgType::HeaderLeaf(_) => {}
+                                }
+
                             }
                         }
                     });
@@ -103,7 +113,7 @@ impl Client<FileDB> {
 impl Client<RedisDB> {
     fn new_redis_db(
         config: Config,
-        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(ChannelMsgType, u64)>>,
     ) -> Result<Self> {
         let config = Arc::new(config);
         let node = Node::new(config.clone(), sender)?;
@@ -260,7 +270,7 @@ impl ClientBuilder {
 
     pub fn build_redis_db(
         self,
-        sender: Option<tokio::sync::mpsc::UnboundedSender<(String, u64)>>,
+        sender: Option<tokio::sync::mpsc::UnboundedSender<(ChannelMsgType, u64)>>,
     ) -> Result<Client<RedisDB>> {
         Client::new_redis_db(self.build()?, sender)
     }

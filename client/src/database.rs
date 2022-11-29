@@ -51,12 +51,35 @@ impl RedisDB {
         Ok(())
     }
 
+    pub fn write_header_leaf(&self, value: String, slot: u64) -> Result<()> {
+        let key = self.create_header_leaf_key(slot);
+        let mut con = self.client.get_connection()?;
+        con.set(key, value)?;
+        Ok(())
+    }
+
+    pub fn write_next_committee_leaf(&self, value: String, slot: u64) -> Result<()> {
+        let key = self.create_next_committee_leaf_key(slot);
+        let mut con = self.client.get_connection()?;
+        con.set(key, value)?;
+
+        Ok(())
+    }
+
     fn create_store_key(&self, slot: u64) -> String {
         format!("store-slot-{}", slot)
     }
 
     fn create_checkpoint_key(&self) -> String {
         format!("checkpoint-slot")
+    }
+
+    fn create_header_leaf_key(&self, slot: u64) -> String{
+        format!("header-leaf-slot-{}",slot)
+    }
+
+    fn create_next_committee_leaf_key(&self, slot: u64) -> String{
+        format!("next-committee-leaf-slot-{}",slot)
     }
 }
 

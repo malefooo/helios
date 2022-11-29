@@ -13,7 +13,7 @@ use env_logger::Env;
 use eyre::{eyre, Result};
 
 use client::{ClientBuilder, ClientType};
-use config::{CliConfig, Config, DBType};
+use config::{ChannelMsgType, CliConfig, Config, DBType};
 use futures::executor::block_on;
 use log::info;
 
@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
             None,
         ),
         DBType::Redis => {
-            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(String, u64)>();
+            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(ChannelMsgType, u64)>();
             (
                 ClientType::RedisDB(
                     ClientBuilder::new()

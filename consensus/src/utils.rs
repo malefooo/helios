@@ -45,6 +45,11 @@ pub fn is_proof_valid<L: Merkleized>(
     }
 }
 
+pub fn leaf_hash<L: Merkleized>(leaf_object: &mut L) -> Result<String>{
+    let leaf_hash = leaf_object.hash_tree_root()?;
+    Ok(hex::encode(leaf_hash.as_bytes()))
+}
+
 #[derive(SimpleSerialize, Default, Debug)]
 struct SigningData {
     object_root: Bytes32,
