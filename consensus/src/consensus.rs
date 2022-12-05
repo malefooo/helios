@@ -130,6 +130,12 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         self.verify_optimistic_update(&optimistic_update)?;
         self.apply_optimistic_update(&optimistic_update);
 
+        if let Some(s) = &self.sender{
+            let json = serde_json::to_string(&finality_update)?;
+            let slot = finality_update.attested_header.slot;
+            s.send((ChannelMsgType::Update(json),slot)).unwrap();
+        }
+
         if self.store.next_sync_committee.is_none() {
             debug!("checking for sync committee update");
             let current_period = calc_sync_period(self.store.finalized_header.slot);
@@ -247,7 +253,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             None
         };
 
-        let next_committee_leaf = if update.next_sync_committee.is_some() && update.next_sync_committee_branch.is_some() {
+        let _next_committee_leaf = if update.next_sync_committee.is_some() && update.next_sync_committee_branch.is_some() {
             let is_valid = is_next_committee_proof_valid(
                 &update.attested_header,
                 &mut update.next_sync_committee.clone().unwrap(),
@@ -284,9 +290,9 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         }
 
         //send leaf to channel
-        if let Some(s) = &self.sender{
-            s.send((ChannelMsgType::NextCommitteeLeaf(next_committee_leaf), update.attested_header.slot))?;
-        }
+        // if let Some(s) = &self.sender{
+        //     s.send((ChannelMsgType::NextCommitteeLeaf(next_committee_leaf), update.attested_header.slot))?;
+        // }
 
         Ok(())
     }

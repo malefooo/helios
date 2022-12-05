@@ -72,7 +72,11 @@ impl ClientType {
                                                 .unwrap_or_default(); //safe
                                         }
                                     }
-                                    ChannelMsgType::Update(_) => {}
+                                    ChannelMsgType::Update(msg) => {
+                                        db.write_update(msg, slot)
+                                            .map_err(|e|info!("write msg to redis error: {:?}", e))
+                                            .unwrap_or_default();
+                                    }
                                     ChannelMsgType::HeaderLeaf(_) => {}
                                 }
 

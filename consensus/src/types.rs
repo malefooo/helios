@@ -208,7 +208,7 @@ pub struct Update {
     pub signature_slot: u64,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, serde::Serialize)]
 pub struct FinalityUpdate {
     pub attested_header: Header,
     pub finalized_header: Header,
